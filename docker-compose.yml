@@ -1,5 +1,5 @@
 services:
-  # Base de Datos Centralizada para todos los servicios
+  # 1. Base de Datos Centralizada
   db-central:
     image: postgres:15-alpine
     container_name: shservices-db
@@ -14,7 +14,7 @@ services:
     networks:
       - shservices-net
 
-  # Message Broker para la comunicación asíncrona
+  # 2. Broker de Mensajes (Coreografía)
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: shservices-broker
@@ -22,8 +22,44 @@ services:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: password123
     ports:
-      - "5672:5672"   # Puerto interno de comunicación AMQP
-      - "15672:15672" # Interfaz gráfica (Dashboard)
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - shservices-net
+
+  # 3. Microservicio de Tickets
+  ticket-service:
+    build: ./ticket-service
+    container_name: shservices-tickets
+    ports:
+      - "8001:8001"
+    depends_on:
+      - db-central
+      - rabbitmq
+    networks:
+      - shservices-net
+
+  # 4. Microservicio de Almacén e Inventario
+  almacen-service:
+    build: ./almacen-service
+    container_name: shservices-almacen
+    ports:
+      - "8002:8002"
+    depends_on:
+      - db-central
+      - rabbitmq
+    networks:
+      - shservices-net
+
+  # 5. Escudo Perimetral (API Gateway)
+  api-gateway:
+    build: ./api-gateway
+    container_name: shservices-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ticket-service
+      - almacen-service
     networks:
       - shservices-net
 

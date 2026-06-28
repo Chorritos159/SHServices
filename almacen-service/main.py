@@ -17,7 +17,7 @@ app = FastAPI(
 )
 
 # Configuración de RabbitMQ
-RABBITMQ_URL = "amqp://admin:password123@localhost:5672/"
+RABBITMQ_URL = "amqp://admin:password123@rabbitmq:5672/"
 
 # --- CONSUMIDOR ASÍNCRONO DE RABBITMQ ---
 async def procesar_evento_inventario(mensaje: aio_pika.IncomingMessage):

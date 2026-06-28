@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Credenciales exactas de tu contenedor Docker
-SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://admin:password123@localhost:5433/shservices_db"
+SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://admin:password123@db-central:5432/shservices_db"
 
 engine = create_async_engine(SQLALCHEMY_DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

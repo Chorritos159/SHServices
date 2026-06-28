@@ -13,8 +13,8 @@ app = FastAPI(
 
 # Mapa de enrutamiento interno hacia los microservicios aislados
 SERVICIOS = {
-    "tickets": "http://localhost:8001",
-    "almacen": "http://localhost:8002"
+    "tickets": "http://ticket-service:8001",
+    "almacen": "http://almacen-service:8002"
 }
 
 # --- CONFIGURACIÓN DE SEGURIDAD CRÍTICA ---

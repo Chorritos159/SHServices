@@ -3,7 +3,7 @@ import json
 import os
 
 # La URL coincide con tu Docker (admin / password123 / puerto 5672)
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://admin:password123@localhost:5672/")
+RABBITMQ_URL = "amqp://admin:password123@rabbitmq:5672/"
 
 async def publicar_evento(exchange_name: str, routing_key: str, mensaje: dict):
     try:
