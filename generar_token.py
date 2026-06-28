@@ -17,17 +17,21 @@ def crear_token_prueba(id_usuario: str, rol: str, sede: str):
     }
     
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    print(f"\n=== TOKEN GENERADO PARA {rol} ===")
+    print(f"\n=== TOKEN GENERADO PARA: {rol} ({id_usuario}) ===")
     print(token)
-    print("===================================\n")
+    print("====================================================\n")
 
-# ... (tu código de arriba se mantiene igual) ...
+if __name__ == "__main__":
+    print("Generando tokens de acceso temporal para pruebas en Swagger...")
+    
+    # 1. RECEPCIÓN (Para crear Órdenes de Servicio y Notas de Venta)
+    crear_token_prueba(id_usuario="Recep01", rol="RECEPCIONISTA", sede="PIURA")
 
-# 1. Generar token para RECEPCIÓN (Inicia el proceso BPM)
-crear_token_prueba(id_usuario="Recep01", rol="RECEPCIONISTA", sede="PIURA")
+    # 2. TÉCNICO (Para ejecutar el PATCH y reparar equipos)
+    crear_token_prueba(id_usuario="Yassir159", rol="TECNICO", sede="PIURA")
+    
+    # 3. ADMIN (Para control total y configuraciones)
+    crear_token_prueba(id_usuario="AdminMaster", rol="ADMIN", sede="PIURA")
 
-# 2. Generar token para tu usuario TÉCNICO (El que va a reparar)
-crear_token_prueba(id_usuario="Yassir159", rol="TECNICO", sede="PIURA")
-
-# 3. Generar token para un CLIENTE (Para probar que el candado funciona)
-crear_token_prueba(id_usuario="72145678", rol="CLIENTE", sede="PIURA")
+    # 4. CLIENTE (Para probar el rechazo de seguridad del Gateway - Error 403)
+    crear_token_prueba(id_usuario="72145678", rol="CLIENTE", sede="PIURA")
