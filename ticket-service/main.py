@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from rabbitmq import publicar_evento
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
@@ -71,6 +72,40 @@ async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)
     resultado = await db.execute(query)
     ticket_completo = resultado.scalars().first()
 
+    # --- 5. COREOGRAFÍA: PUBLICAR EVENTOS A RABBITMQ ---
+    evento_payload = {
+        "eventId": str(uuid.uuid4()),
+        "correlationId": id_ticket_generado,
+        "producer": "ServicioGestionTickets",
+        "payload": {
+            "id_ticket": id_ticket_generado,
+            "tipo_documento": payload.tipo_documento,
+            "estado": estado_inicial,
+            "sede": sede_actual,
+            "monto_total": monto_total
+        }
+    }
+
+    # Emitimos un evento distinto dependiendo de qué sucedió
+    if payload.tipo_documento == "ORDEN_SERVICIO":
+        evento_payload["eventType"] = "TicketEnCola"
+        evento_payload["payload"]["equipo"] = payload.equipo
+        
+        await publicar_evento(
+            exchange_name="tickets.eventos",
+            routing_key="ticket.encola",
+            mensaje=evento_payload
+        )
+        
+    elif payload.tipo_documento == "NOTA_VENTA":
+        evento_payload["eventType"] = "VentaCompletada"
+        
+        await publicar_evento(
+            exchange_name="tickets.eventos",
+            routing_key="venta.completada",
+            mensaje=evento_payload
+        )
+        
     return ticket_completo
 
 if __name__ == "__main__":
