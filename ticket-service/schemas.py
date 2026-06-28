@@ -35,17 +35,14 @@ class TicketCreate(BaseModel):
     # Campos exclusivos para Nota de Venta
     detalles: Optional[List[ItemDetalle]] = Field(default_factory=list)
 
-    # El Validador de Negocio (Fail-Fast en la entrada)
     @model_validator(mode='after')
     def validar_campos_por_tipo(self):
         if self.tipo_documento == 'ORDEN_SERVICIO':
             if not self.equipo or not self.falla:
                 raise ValueError('Error: Una ORDEN_SERVICIO requiere ingresar obligatoriamente el "equipo" y la "falla".')
-        
         elif self.tipo_documento == 'NOTA_VENTA':
             if not self.detalles or len(self.detalles) == 0:
                 raise ValueError('Error: Una NOTA_VENTA requiere ingresar al menos un producto en los "detalles".')
-        
         return self
 
 # --- 4. ESQUEMA DE RESPUESTA GLOBAL ---
@@ -58,7 +55,7 @@ class TicketResponse(BaseModel):
     monto_total: float
     fecha_registro: datetime
     
-    # Los opcionales regresan en la respuesta (serán nulos dependiendo del tipo)
+    # Los opcionales regresan en la respuesta
     equipo: Optional[str] = None
     falla: Optional[str] = None
     id_tecnico_asignado: Optional[str] = None
@@ -69,3 +66,8 @@ class TicketResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- 5. ESQUEMA PARA ACTUALIZAR (EL TÉCNICO REPARA) ---
+class TicketReparar(BaseModel):
+    id_tecnico: str = Field(..., description="ID del técnico que realiza el trabajo")
+    repuestos_usados: Optional[List[ItemDetalle]] = Field(default_factory=list)
