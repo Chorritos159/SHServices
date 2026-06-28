@@ -1,0 +1,17 @@
+# Entornos virtuales
+venv/
+env/
+ENV/
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Bases de datos locales y cache
+*.db
+*.sqlite3
+.pytest_cache/
+
+# Variables de entorno
+.env

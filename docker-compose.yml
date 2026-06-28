@@ -1,0 +1,35 @@
+services:
+  # Base de Datos Centralizada para todos los servicios
+  db-central:
+    image: postgres:15-alpine
+    container_name: shservices-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: shservices_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - shservices-net
+
+  # Message Broker para la comunicación asíncrona
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: shservices-broker
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password123
+    ports:
+      - "5672:5672"   # Puerto interno de comunicación AMQP
+      - "15672:15672" # Interfaz gráfica (Dashboard)
+    networks:
+      - shservices-net
+
+networks:
+  shservices-net:
+    driver: bridge
+
+volumes:
+  pgdata:
