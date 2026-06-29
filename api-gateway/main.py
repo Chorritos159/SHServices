@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Request, HTTPException, Body, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import httpx
 import jwt
 import uvicorn
+import os
 
 app = FastAPI(
     title="API Gateway Centralizado - SHServices",
@@ -11,16 +13,26 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# --- CONFIGURACIÓN DE CORS (Permitir al Frontend conectarse) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite peticiones desde cualquier origen (localhost:5173)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mapa de enrutamiento interno hacia los microservicios aislados
 SERVICIOS = {
     "tickets": "http://ticket-service:8001",
-    "almacen": "http://almacen-service:8002"
+    "almacen": "http://almacen-service:8002",
+    "auth": "http://auth-service:8003"
 }
 
 # --- CONFIGURACIÓN DE SEGURIDAD CRÍTICA ---
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 security = HTTPBearer()
-SECRET_KEY = "shservices_super_secreto_2026"
-ALGORITHM = "HS256"
 
 # 1. AUTENTICACIÓN (AuthN): Valida la firma y vigencia del token JWT
 def verificar_token(credentials: HTTPAuthorizationCredentials = Security(security)):
@@ -47,6 +59,37 @@ def verificar_permisos_operativos(usuario_token: dict = Depends(verificar_token)
 
 
 # --- PROXIES REVERSOS ASÍNCRONOS PROTEGIDOS ---
+
+# --- RUTAS DE AUTENTICACIÓN E IDENTIDAD (IAM) ---
+
+# 1. Login (RUTA PÚBLICA: No requiere token)
+@app.post("/api/v1/auth/login")
+async def proxy_login(payload: dict = Body(...)):
+    url = f"{SERVICIOS['auth']}/api/v1/auth/login"
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=payload, timeout=10.0)
+            if response.status_code >= 400:
+                raise HTTPException(status_code=response.status_code, detail=response.json().get("detail", "Error de autenticación"))
+            return response.json()
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="El Servicio de Autenticación no está disponible.")
+
+# 2. Registro (RUTA PROTEGIDA: Solo para Administradores)
+@app.post("/api/v1/auth/registro")
+async def proxy_registro(
+    payload: dict = Body(...),
+    usuario_token: dict = Depends(verificar_permisos_operativos)
+):
+    if usuario_token.get("rol") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Estrictamente prohibido: Solo los administradores pueden registrar personal.")
+    
+    url = f"{SERVICIOS['auth']}/api/v1/auth/registro"
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, timeout=10.0)
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail=response.json().get("detail"))
+        return response.json()
 
 # Enrutador para la raíz de Gestión de Tickets (POST)
 @app.post("/api/v1/tickets")

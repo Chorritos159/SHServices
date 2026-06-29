@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -7,7 +8,8 @@ import asyncio
 import aio_pika
 import json
 
-from database import engine, Base, get_db, SessionLocal
+
+from database import engine, Base, get_db
 from models import Producto, StockSede
 from schemas import ProductoBase, ProductoResponse, StockBase, StockResponse
 
@@ -17,7 +19,7 @@ app = FastAPI(
 )
 
 # Configuración de RabbitMQ
-RABBITMQ_URL = "amqp://admin:password123@rabbitmq:5672/"
+RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
 # --- CONSUMIDOR ASÍNCRONO DE RABBITMQ ---
 async def procesar_evento_inventario(mensaje: aio_pika.IncomingMessage):
