@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
-import datetime
+from datetime import datetime
 import uuid
 
 # 1. Catálogo de Servicios (Mantenimiento, Formateo, etc.)
@@ -22,16 +22,16 @@ class Ticket(Base):
     id_ticket = Column(String, primary_key=True, index=True) 
     
     tipo_documento = Column(String, nullable=False) # NOTA_VENTA o ORDEN_SERVICIO
-    id_cliente = Column(String, nullable=False)
+    documento_cliente = Column(String, nullable=False) # DNI / RUC (antes id_cliente)
+    nombre_cliente = Column(String, nullable=False) # Nombre completo o Razón Social
     estado = Column(String, nullable=False) # COMPLETADO (Venta) o EN_COLA (Orden)
     sede = Column(String, nullable=False)
     monto_total = Column(Float, default=0.0)
-    fecha_registro = Column(DateTime, default=datetime.datetime.utcnow)
-
-    # --- CAMPOS EXCLUSIVOS DE ORDEN DE SERVICIO ---
+    fecha_registro = Column(DateTime, default=datetime.utcnow)   
     # (Quedarán automáticamente en NULL si es una Nota de Venta)
     equipo = Column(String, nullable=True)
-    falla = Column(String, nullable=True)
+    caracteristicas = Column(String, nullable=True) # Cargador, golpes, etc.
+    fallas = Column(String, nullable=True) # Falla reportada por el cliente
     id_tecnico_asignado = Column(String, nullable=True)
     id_servicio_aplicado = Column(String, ForeignKey("esquema_tickets.catalogo_servicios.id"), nullable=True)
 

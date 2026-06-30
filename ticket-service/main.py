@@ -22,28 +22,46 @@ async def startup():
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS esquema_tickets"))
         await conn.run_sync(Base.metadata.create_all)
 
+# --- NUEVO: ENDPOINT PARA LISTAR TICKETS ---
+@app.get("/api/v1/tickets")
+async def listar_tickets(sede: str = None, db: AsyncSession = Depends(get_db)):
+    # Si nos pasan la sede, filtramos. Si no, devolvemos todos.
+    if sede:
+        query = select(Ticket).where(Ticket.sede == sede).order_by(Ticket.fecha_registro.desc())
+    else:
+        query = select(Ticket).order_by(Ticket.fecha_registro.desc())
+        
+    resultado = await db.execute(query)
+    tickets = resultado.scalars().all()
+    return tickets
+
 @app.post("/api/v1/tickets", response_model=TicketResponse, status_code=201)
 async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)):
     prefijo = "VEN" if payload.tipo_documento == "NOTA_VENTA" else "ORD"
-    sede_actual = "PIURA" 
-    id_ticket_generado = f"{prefijo}-{sede_actual[:3].upper()}-{str(uuid.uuid4())[:4].upper()}"
+    # Tomamos la sede dinámicamente del payload que envía React (Ej. "PIURA" o "TALARA")
+    sede_actual = payload.sede.upper() if payload.sede else "PIURA"
+    
+    id_ticket_generado = f"{prefijo}-{sede_actual[:3]}-{str(uuid.uuid4())[:4].upper()}"
 
-    estado_inicial = "COMPLETADO" if payload.tipo_documento == "NOTA_VENTA" else "EN_COLA"
+    # Estado modificado para alinear con el Kanban: PENDIENTE en vez de EN_COLA
+    estado_inicial = "COMPLETADO" if payload.tipo_documento == "NOTA_VENTA" else "PENDIENTE"
 
     nuevo_ticket = Ticket(
         id_ticket=id_ticket_generado,
         tipo_documento=payload.tipo_documento,
-        id_cliente=payload.id_cliente,
+        documento_cliente=payload.documento_cliente, # Actualizado
+        nombre_cliente=payload.nombre_cliente,       # Nuevo
         estado=estado_inicial,
         sede=sede_actual,
         equipo=payload.equipo,
-        falla=payload.falla
+        caracteristicas=payload.caracteristicas,     # Nuevo
+        fallas=payload.fallas                        # Actualizado de 'falla'
     )
 
     db.add(nuevo_ticket)
     await db.flush() 
 
-    monto_total = 0.0
+    monto_total = payload.monto_total or 0.0
 
     if payload.tipo_documento == "NOTA_VENTA" and payload.detalles:
         for item in payload.detalles:
@@ -97,10 +115,10 @@ async def reparar_ticket(id_ticket: str, payload: TicketReparar, db: AsyncSessio
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     if ticket_db.tipo_documento != "ORDEN_SERVICIO":
         raise HTTPException(status_code=400, detail="Solo las Órdenes de Servicio pueden ser reparadas en el taller")
-    if ticket_db.estado != "EN_COLA":
-        raise HTTPException(status_code=400, detail=f"El ticket no está en cola. Estado actual: {ticket_db.estado}")
+    if ticket_db.estado not in ["PENDIENTE", "EN_PROCESO"]:
+        raise HTTPException(status_code=400, detail=f"El ticket no se puede reparar. Estado actual: {ticket_db.estado}")
 
-    ticket_db.estado = "REPARADO"
+    ticket_db.estado = "REPARADO" # Estado final del Kanban
     ticket_db.id_tecnico_asignado = payload.id_tecnico
 
     costo_repuestos = 0.0

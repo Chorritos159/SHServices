@@ -87,6 +87,7 @@ services:
     environment:
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM}
+      FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
       - ticket-service
       - almacen-service

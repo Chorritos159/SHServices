@@ -89,5 +89,19 @@ async def registrar_usuario(nuevo_usuario: RegistroRequest, db: AsyncSession = D
     await db.commit()
     return {"mensaje": f"Usuario {nuevo_usuario.usuario} creado exitosamente con rol {nuevo_usuario.rol}"}
 
+
+@app.get("/api/v1/auth/usuarios")
+async def listar_usuarios(db: AsyncSession = Depends(get_db)):
+    # Seleccionamos solo los datos seguros (NUNCA devolver el password_hash al frontend)
+    query = select(Usuario.id_usuario, Usuario.rol, Usuario.sede, Usuario.activo)
+    resultado = await db.execute(query)
+    usuarios = resultado.all()
+    
+    # Formateamos la respuesta como una lista de diccionarios
+    return [
+        {"id": u.id_usuario, "rol": u.rol, "sede": u.sede, "activo": u.activo} 
+        for u in usuarios
+    ]
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8003, reload=True)

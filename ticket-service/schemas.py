@@ -25,12 +25,17 @@ class ItemDetalleResponse(ItemDetalle):
 
 # --- 3. ESQUEMAS PARA TICKETS (ENTRADA INTELIGENTE) ---
 class TicketCreate(BaseModel):
-    tipo_documento: str = Field(..., pattern="^(NOTA_VENTA|ORDEN_SERVICIO)$")
-    id_cliente: str
+    # Por defecto, el formulario de Recepción creará Órdenes de Servicio
+    tipo_documento: str = Field(default="ORDEN_SERVICIO", pattern="^(NOTA_VENTA|ORDEN_SERVICIO)$")
+    documento_cliente: str = Field(..., description="DNI o RUC")
+    nombre_cliente: str = Field(..., description="Nombre completo o Empresa")
+    sede: Optional[str] = Field(None, description="Inyectado por el API Gateway o el Frontend")
+    monto_total: Optional[float] = Field(0.0, description="Monto inicial a cobrar")
     
     # Campos exclusivos para Orden de Servicio
-    equipo: Optional[str] = Field(None, description="Ej: Laptop Lenovo ThinkPad P15")
-    falla: Optional[str] = Field(None, description="Ej: Pantalla rota")
+    equipo: Optional[str] = Field(None, description="Ej: Laptop Lenovo ThinkPad L15")
+    caracteristicas: Optional[str] = Field(None, description="Ej: Cargador, raspones, etc.")
+    fallas: Optional[str] = Field(None, description="Ej: Pantalla rota")
     
     # Campos exclusivos para Nota de Venta
     detalles: Optional[List[ItemDetalle]] = Field(default_factory=list)
@@ -38,8 +43,8 @@ class TicketCreate(BaseModel):
     @model_validator(mode='after')
     def validar_campos_por_tipo(self):
         if self.tipo_documento == 'ORDEN_SERVICIO':
-            if not self.equipo or not self.falla:
-                raise ValueError('Error: Una ORDEN_SERVICIO requiere ingresar obligatoriamente el "equipo" y la "falla".')
+            if not self.equipo or not self.fallas:
+                raise ValueError('Error: Una ORDEN_SERVICIO requiere ingresar obligatoriamente el "equipo" y las "fallas".')
         elif self.tipo_documento == 'NOTA_VENTA':
             if not self.detalles or len(self.detalles) == 0:
                 raise ValueError('Error: Una NOTA_VENTA requiere ingresar al menos un producto en los "detalles".')
@@ -50,14 +55,16 @@ class TicketResponse(BaseModel):
     id_ticket: str
     tipo_documento: str
     estado: str
-    id_cliente: str
+    documento_cliente: str
+    nombre_cliente: str
     sede: str
     monto_total: float
     fecha_registro: datetime
     
     # Los opcionales regresan en la respuesta
     equipo: Optional[str] = None
-    falla: Optional[str] = None
+    caracteristicas: Optional[str] = None
+    fallas: Optional[str] = None
     id_tecnico_asignado: Optional[str] = None
     id_servicio_aplicado: Optional[str] = None
     
