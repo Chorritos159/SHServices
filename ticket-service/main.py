@@ -105,6 +105,23 @@ async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)
 
     return ticket_completo
 
+@app.patch("/api/v1/tickets/{id_ticket}/iniciar", response_model=TicketResponse)
+async def iniciar_reparacion(id_ticket: str, db: AsyncSession = Depends(get_db)):
+    query = select(Ticket).options(selectinload(Ticket.detalles)).where(Ticket.id_ticket == id_ticket)
+    resultado = await db.execute(query)
+    ticket_db = resultado.scalars().first()
+
+    if not ticket_db:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    if ticket_db.estado != "PENDIENTE":
+        raise HTTPException(status_code=400, detail="Solo los tickets PENDIENTES pueden iniciar proceso.")
+
+    ticket_db.estado = "EN_PROCESO"
+    await db.commit()
+    await db.refresh(ticket_db)
+
+    return ticket_db
+
 @app.patch("/api/v1/tickets/{id_ticket}/reparar", response_model=TicketResponse)
 async def reparar_ticket(id_ticket: str, payload: TicketReparar, db: AsyncSession = Depends(get_db)):
     query = select(Ticket).options(selectinload(Ticket.detalles)).where(Ticket.id_ticket == id_ticket)
@@ -152,6 +169,25 @@ async def reparar_ticket(id_ticket: str, payload: TicketReparar, db: AsyncSessio
     }
     
     await publicar_evento("tickets.eventos", "ticket.reparado", evento_payload)
+
+    return ticket_db
+
+@app.patch("/api/v1/tickets/{id_ticket}/entregar", response_model=TicketResponse)
+async def entregar_ticket(id_ticket: str, db: AsyncSession = Depends(get_db)):
+    query = select(Ticket).options(selectinload(Ticket.detalles)).where(Ticket.id_ticket == id_ticket)
+    resultado = await db.execute(query)
+    ticket_db = resultado.scalars().first()
+
+    if not ticket_db:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+
+    if ticket_db.estado != "REPARADO":
+        raise HTTPException(status_code=400, detail="El equipo aún no ha sido reparado por el taller.")
+
+    ticket_db.estado = "ENTREGADO"
+
+    await db.commit()
+    await db.refresh(ticket_db)
 
     return ticket_db
 
