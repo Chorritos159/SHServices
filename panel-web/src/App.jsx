@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Recepcion from './pages/Recepcion';
 import Taller from './pages/Taller';
+import Clientes from './pages/Clientes';
+import AlmacenRepuestos from './pages/AlmacenRepuestos';
 import Admin from './pages/Admin';
 import Navbar from './components/Navbar';
 
@@ -47,6 +49,8 @@ function App() {
             <Route path="/" element={<Login setToken={handleLogin} />} />
             <Route path="/recepcion" element={token ? <Recepcion token={token} /> : <Navigate to="/" />} />
             <Route path="/taller" element={token ? <Taller token={token} /> : <Navigate to="/" />} />
+            <Route path="/clientes" element={token ? <Clientes token={token} /> : <Navigate to="/" />} />
+            <Route path="/almacen-repuestos" element={token ? <AlmacenRepuestos token={token} /> : <Navigate to="/" />} />
             <Route path="/admin" element={token ? <Admin token={token} /> : <Navigate to="/" />} />
             <Route path="/test" element={token ? <PanelPruebasSOA token={token} setToken={handleLogin} /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />

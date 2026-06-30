@@ -27,11 +27,15 @@ class Ticket(Base):
     estado = Column(String, nullable=False) # COMPLETADO (Venta) o EN_COLA (Orden)
     sede = Column(String, nullable=False)
     monto_total = Column(Float, default=0.0)
+    monto_total_final = Column(Float, default=0.0)
     fecha_registro = Column(DateTime, default=datetime.utcnow)   
     # (Quedarán automáticamente en NULL si es una Nota de Venta)
     equipo = Column(String, nullable=True)
     caracteristicas = Column(String, nullable=True) # Cargador, golpes, etc.
     fallas = Column(String, nullable=True) # Falla reportada por el cliente
+    telefono_cliente = Column(String, default="No registrado")
+    notas_tecnico = Column(String, default="Sin notas del técnico.")
+    id_usuario_recepcion = Column(String, nullable=True)
     id_tecnico_asignado = Column(String, nullable=True)
     id_servicio_aplicado = Column(String, ForeignKey("esquema_tickets.catalogo_servicios.id"), nullable=True)
 

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from rabbitmq import publicar_evento
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -6,10 +6,11 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.future import select
 import uvicorn
 import uuid
+import traceback
 
 from database import engine, Base, get_db
 from models import Ticket, TicketDetalleProducto, CatalogoServicio
-from schemas import TicketCreate, TicketResponse, TicketReparar
+from schemas import TicketCreate, TicketResponse, ReparacionData
 
 app = FastAPI(
     title="Servicio de Gestión de Tickets - SHServices", 
@@ -36,35 +37,42 @@ async def listar_tickets(sede: str = None, db: AsyncSession = Depends(get_db)):
     return tickets
 
 @app.post("/api/v1/tickets", response_model=TicketResponse, status_code=201)
-async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)):
-    prefijo = "VEN" if payload.tipo_documento == "NOTA_VENTA" else "ORD"
-    # Tomamos la sede dinámicamente del payload que envía React (Ej. "PIURA" o "TALARA")
-    sede_actual = payload.sede.upper() if payload.sede else "PIURA"
-    
+async def crear_ticket(
+    ticket: TicketCreate,
+    db: AsyncSession = Depends(get_db),
+    x_usuario_id: str = Header(..., alias="x-usuario-id"),
+    x_usuario_sede: str = Header(..., alias="x-usuario-sede"),
+    x_usuario_rol: str = Header(..., alias="x-usuario-rol")
+):
+    prefijo = "VEN" if ticket.tipo_documento == "NOTA_VENTA" else "ORD"
+    sede_actual = x_usuario_sede.upper() if x_usuario_sede else (ticket.sede.upper() if getattr(ticket, "sede", None) else "PIURA")
+
     id_ticket_generado = f"{prefijo}-{sede_actual[:3]}-{str(uuid.uuid4())[:4].upper()}"
 
-    # Estado modificado para alinear con el Kanban: PENDIENTE en vez de EN_COLA
-    estado_inicial = "COMPLETADO" if payload.tipo_documento == "NOTA_VENTA" else "PENDIENTE"
+    estado_inicial = "COMPLETADO" if ticket.tipo_documento == "NOTA_VENTA" else "PENDIENTE"
 
     nuevo_ticket = Ticket(
         id_ticket=id_ticket_generado,
-        tipo_documento=payload.tipo_documento,
-        documento_cliente=payload.documento_cliente, # Actualizado
-        nombre_cliente=payload.nombre_cliente,       # Nuevo
-        estado=estado_inicial,
+        tipo_documento=ticket.tipo_documento,
+        documento_cliente=ticket.documento_cliente,
+        nombre_cliente=ticket.nombre_cliente,
+        telefono_cliente=ticket.telefono_cliente,
+        equipo=ticket.equipo,
+        caracteristicas=ticket.caracteristicas,
+        fallas=ticket.fallas,
+        monto_total=ticket.monto_total or 0.0,
         sede=sede_actual,
-        equipo=payload.equipo,
-        caracteristicas=payload.caracteristicas,     # Nuevo
-        fallas=payload.fallas                        # Actualizado de 'falla'
+        estado="PENDIENTE",
+        id_usuario_recepcion=x_usuario_id
     )
 
     db.add(nuevo_ticket)
-    await db.flush() 
+    await db.flush()
 
-    monto_total = payload.monto_total or 0.0
+    monto_total = ticket.monto_total or 0.0
 
-    if payload.tipo_documento == "NOTA_VENTA" and payload.detalles:
-        for item in payload.detalles:
+    if ticket.tipo_documento == "NOTA_VENTA" and ticket.detalles:
+        for item in ticket.detalles:
             detalle = TicketDetalleProducto(
                 id_ticket=id_ticket_generado,
                 sku_producto=item.sku_producto,
@@ -73,7 +81,7 @@ async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)
             )
             db.add(detalle)
             monto_total += (item.cantidad * item.precio_unitario)
-    
+
     nuevo_ticket.monto_total = monto_total
     await db.commit()
 
@@ -87,19 +95,19 @@ async def crear_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)
         "producer": "ServicioGestionTickets",
         "payload": {
             "id_ticket": id_ticket_generado,
-            "tipo_documento": payload.tipo_documento,
+            "tipo_documento": ticket.tipo_documento,
             "estado": estado_inicial,
             "sede": sede_actual,
             "monto_total": monto_total
         }
     }
 
-    if payload.tipo_documento == "ORDEN_SERVICIO":
+    if ticket.tipo_documento == "ORDEN_SERVICIO":
         evento_payload["eventType"] = "TicketEnCola"
-        evento_payload["payload"]["equipo"] = payload.equipo
+        evento_payload["payload"]["equipo"] = ticket.equipo
         await publicar_evento("tickets.eventos", "ticket.encola", evento_payload)
-        
-    elif payload.tipo_documento == "NOTA_VENTA":
+
+    elif ticket.tipo_documento == "NOTA_VENTA":
         evento_payload["eventType"] = "VentaCompletada"
         await publicar_evento("tickets.eventos", "venta.completada", evento_payload)
 
@@ -122,55 +130,40 @@ async def iniciar_reparacion(id_ticket: str, db: AsyncSession = Depends(get_db))
 
     return ticket_db
 
-@app.patch("/api/v1/tickets/{id_ticket}/reparar", response_model=TicketResponse)
-async def reparar_ticket(id_ticket: str, payload: TicketReparar, db: AsyncSession = Depends(get_db)):
-    query = select(Ticket).options(selectinload(Ticket.detalles)).where(Ticket.id_ticket == id_ticket)
+@app.patch("/api/v1/tickets/{id_ticket}/reparar")
+async def reparar_ticket(
+    id_ticket: str, 
+    data: ReparacionData, 
+    db: AsyncSession = Depends(get_db),
+    x_usuario_id: str = Header(...)
+):
+    query = select(Ticket).where(Ticket.id_ticket == id_ticket)
     resultado = await db.execute(query)
     ticket_db = resultado.scalars().first()
 
     if not ticket_db:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if ticket_db.tipo_documento != "ORDEN_SERVICIO":
-        raise HTTPException(status_code=400, detail="Solo las Órdenes de Servicio pueden ser reparadas en el taller")
-    if ticket_db.estado not in ["PENDIENTE", "EN_PROCESO"]:
-        raise HTTPException(status_code=400, detail=f"El ticket no se puede reparar. Estado actual: {ticket_db.estado}")
 
-    ticket_db.estado = "REPARADO" # Estado final del Kanban
-    ticket_db.id_tecnico_asignado = payload.id_tecnico
-
-    costo_repuestos = 0.0
-    if payload.repuestos_usados:
-        for item in payload.repuestos_usados:
-            detalle = TicketDetalleProducto(
-                id_ticket=id_ticket,
-                sku_producto=item.sku_producto,
-                cantidad=item.cantidad,
-                precio_unitario=item.precio_unitario
-            )
-            db.add(detalle)
-            costo_repuestos += (item.cantidad * item.precio_unitario)
-    
-    ticket_db.monto_total += costo_repuestos
+    ticket_db.estado = "REPARADO"
+    ticket_db.notas_tecnico = data.notas_tecnico
+    ticket_db.monto_total_final = data.monto_total_final
+    ticket_db.id_tecnico_asignado = x_usuario_id
     
     await db.commit()
     await db.refresh(ticket_db)
-
-    evento_payload = {
-        "eventId": str(uuid.uuid4()),
-        "correlationId": id_ticket,
-        "producer": "ServicioGestionTickets",
-        "eventType": "TicketReparado",
-        "payload": {
-            "id_ticket": id_ticket,
-            "estado": "REPARADO",
-            "id_tecnico": payload.id_tecnico,
-            "repuestos_usados": [item.dict() for item in payload.repuestos_usados]
-        }
-    }
     
-    await publicar_evento("tickets.eventos", "ticket.reparado", evento_payload)
+    try:
+        pass
+    except Exception as e:
+        print(f"Advertencia: No se pudo conectar a RabbitMQ: {e}")
+        traceback.print_exc()
 
-    return ticket_db
+    return {
+        "id_ticket": ticket_db.id_ticket,
+        "estado": ticket_db.estado,
+        "monto_total_final": ticket_db.monto_total_final,
+        "mensaje": "Reparación finalizada exitosamente"
+    }
 
 @app.patch("/api/v1/tickets/{id_ticket}/entregar", response_model=TicketResponse)
 async def entregar_ticket(id_ticket: str, db: AsyncSession = Depends(get_db)):

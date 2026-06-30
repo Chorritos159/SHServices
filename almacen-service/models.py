@@ -1,26 +1,27 @@
-from sqlalchemy import Column, String, Float, Integer, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Integer, Float, DateTime
 from database import Base
+from datetime import datetime
 import uuid
 
+
+def generar_id_producto():
+    return f"PROD-{str(uuid.uuid4())[:8].upper()}"
+
+
 class Producto(Base):
-    __tablename__ = "productos"
-    __table_args__ = {'schema': 'esquema_almacen'}
+    __tablename__ = "inventario"
 
-    sku = Column(String, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)
-    categoria = Column(String, nullable=False) # Ej: REPUESTO, ACCESORIO
-    precio_unitario = Column(Float, nullable=False)
+    id_producto = Column(String, primary_key=True, default=generar_id_producto)
+    nombre = Column(String, nullable=False, index=True)
+    descripcion = Column(String)
 
-    stocks = relationship("StockSede", back_populates="producto")
+    # Clasificación clave: "REPUESTO", "VENTA_PUBLICA", "AMBOS"
+    categoria = Column(String, nullable=False, default="VENTA_PUBLICA")
 
-class StockSede(Base):
-    __tablename__ = "stock_sedes"
-    __table_args__ = {'schema': 'esquema_almacen'}
+    stock = Column(Integer, default=0, nullable=False)
+    precio_unitario = Column(Float, default=0.0, nullable=False)
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
-    sku_producto = Column(String, ForeignKey("esquema_almacen.productos.sku"), nullable=False)
-    sede = Column(String, nullable=False) # PIURA, TALARA
-    cantidad_actual = Column(Integer, default=0, nullable=False)
+    # Aislamiento Multi-Tenant (Multi-Sede)
+    sede = Column(String, nullable=False, index=True)
 
-    producto = relationship("Producto", back_populates="stocks")
+    fecha_ingreso = Column(DateTime, default=datetime.utcnow)

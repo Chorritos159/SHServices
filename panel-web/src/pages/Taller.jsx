@@ -50,7 +50,7 @@ function Taller({ token }) {
   }, [token, cargarTicketsTaller]);
 
   // --- FUNCIÓN REAL CONECTADA AL BACKEND ---
-  const handleCambiarEstado = async (id_ticket, nuevoEstado) => {
+  const handleCambiarEstado = async (id_ticket, nuevoEstado, repuestos = [], notas = '', precioFinal = 0) => {
     try {
       if (nuevoEstado === 'EN_PROCESO') {
         await axios.patch(
@@ -62,8 +62,9 @@ function Taller({ token }) {
         await axios.patch(
           `http://localhost:8000/api/v1/tickets/${id_ticket}/reparar`,
           {
-            id_tecnico: infoLocal.idUsuario,
-            repuestos_usados: []
+            notas_tecnico: notas,
+            monto_total_final: precioFinal,
+            repuestos_usados: repuestos
           },
           { headers: { 'Authorization': `Bearer ${token}` } }
         );
@@ -115,6 +116,7 @@ function Taller({ token }) {
       {modalAbierto && ticketSeleccionado && (
         <ModalGestionTicket 
           ticket={ticketSeleccionado} 
+          token={token}  
           onClose={() => setModalAbierto(false)} 
           onCambiarEstado={handleCambiarEstado} 
         />

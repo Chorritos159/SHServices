@@ -29,6 +29,7 @@ class TicketCreate(BaseModel):
     tipo_documento: str = Field(default="ORDEN_SERVICIO", pattern="^(NOTA_VENTA|ORDEN_SERVICIO)$")
     documento_cliente: str = Field(..., description="DNI o RUC")
     nombre_cliente: str = Field(..., description="Nombre completo o Empresa")
+    telefono_cliente: str = Field(default="No registrado", description="Teléfono del cliente")
     sede: Optional[str] = Field(None, description="Inyectado por el API Gateway o el Frontend")
     monto_total: Optional[float] = Field(0.0, description="Monto inicial a cobrar")
     
@@ -75,6 +76,10 @@ class TicketResponse(BaseModel):
         from_attributes = True
 
 # --- 5. ESQUEMA PARA ACTUALIZAR (EL TÉCNICO REPARA) ---
-class TicketReparar(BaseModel):
-    id_tecnico: str = Field(..., description="ID del técnico que realiza el trabajo")
+class ReparacionData(BaseModel):
+    notas_tecnico: str = Field(default="", description="Observaciones del técnico sobre la reparación")
+    monto_total_final: float = Field(ge=0.0, description="Precio final dictado por el técnico")
     repuestos_usados: Optional[List[ItemDetalle]] = Field(default_factory=list)
+
+class TicketReparar(ReparacionData):
+    id_tecnico: str = Field(..., description="ID del técnico que realiza el trabajo")
