@@ -15,6 +15,18 @@ function ModalGestionTicket({ ticket, token, onClose, onCambiarEstado }) {
     }
   }, [ticket, token]);
 
+  // NUEVO: Auto-sumar el precio de los repuestos
+  useEffect(() => {
+    if (repuestosUsados.length > 0) {
+      const total = repuestosUsados.reduce((suma, repuesto) => {
+        return suma + parseFloat(repuesto.precio_unitario || 0);
+      }, 0);
+      setPrecioFinal(total.toFixed(2));
+    } else {
+      setPrecioFinal('');
+    }
+  }, [repuestosUsados]);
+
   const cargarRepuestos = async () => {
     try {
       const res = await axios.get('http://localhost:8000/api/v1/almacen/productos', {

@@ -17,7 +17,6 @@ function Clientes({ token }) {
       const res = await axios.get('http://localhost:8000/api/v1/tickets', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // Filtramos solo los que ya fueron procesados o entregados (para garantías)
       const historial = res.data.filter(t => t.estado === 'REPARADO' || t.estado === 'ENTREGADO');
       setTodosLosTickets(historial);
       setTicketsFiltrados(historial);
@@ -44,14 +43,34 @@ function Clientes({ token }) {
     }
   };
 
-  const procesarGarantia = (id_ticket) => {
-    // Aquí a futuro abriremos un modal para registrar el re-ingreso a costo cero
-    alert(`Iniciando proceso de garantía para el ticket: ${id_ticket}. (Función en construcción)`);
+  // --- LÓGICA DINÁMICA DE GARANTÍA (Cero impacto en el servidor) ---
+  const evaluarGarantia = (fechaEntrega) => {
+    if (!fechaEntrega) return { estado: 'SIN INICIAR', color: '#6c757d', icono: '⏳' };
+    
+    const fechaInicio = new Date(fechaEntrega);
+    const fechaLimite = new Date(fechaInicio);
+    fechaLimite.setDate(fechaLimite.getDate() + 90); // +3 meses
+    
+    const hoy = new Date();
+    
+    if (hoy <= fechaLimite) {
+      return { estado: 'GARANTÍA VIGENTE', color: '#28a745', icono: '🛡️' };
+    } else {
+      return { estado: 'GARANTÍA EXPIRADA', color: '#dc3545', icono: '❌' };
+    }
+  };
+
+  const procesarGarantia = (ticket) => {
+    const infoGarantia = evaluarGarantia(ticket.fecha_entrega);
+    if (infoGarantia.estado === 'GARANTÍA EXPIRADA') {
+      alert("La garantía de 3 meses ha expirado para este equipo. Se debe generar una nueva Orden de Servicio con costo.");
+    } else {
+      alert(`Iniciando proceso de garantía válido para el ticket: ${ticket.id_ticket}`);
+    }
   };
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#f4f6f9', minHeight: '90vh' }}>
-      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0052cc', paddingBottom: '10px', marginBottom: '20px' }}>
         <h2 style={{ color: '#0052cc', margin: 0 }}>👥 Directorio de Clientes y Garantías</h2>
       </div>
@@ -75,31 +94,44 @@ function Clientes({ token }) {
                 <th style={{ padding: '12px', borderBottom: '2px solid #eee' }}>Cliente</th>
                 <th style={{ padding: '12px', borderBottom: '2px solid #eee' }}>Orden Original</th>
                 <th style={{ padding: '12px', borderBottom: '2px solid #eee' }}>Equipo</th>
-                <th style={{ padding: '12px', borderBottom: '2px solid #eee' }}>Estado</th>
+                <th style={{ padding: '12px', borderBottom: '2px solid #eee', textAlign: 'center' }}>Cobertura</th>
                 <th style={{ padding: '12px', borderBottom: '2px solid #eee', textAlign: 'center' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
-              {ticketsFiltrados.length > 0 ? ticketsFiltrados.map(t => (
-                <tr key={t.id_ticket} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px' }}>{t.documento_cliente}</td>
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>{t.nombre_cliente}</td>
-                  <td style={{ padding: '12px', color: '#0052cc', fontWeight: 'bold' }}>{t.id_ticket}</td>
-                  <td style={{ padding: '12px' }}>{t.equipo}</td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{ backgroundColor: t.estado === 'ENTREGADO' ? '#28a745' : '#17a2b8', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
-                      {t.estado}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button onClick={() => procesarGarantia(t.id_ticket)} style={{ backgroundColor: '#ffc107', color: '#333', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                      🛡️ Aplicar Garantía
-                    </button>
-                  </td>
-                </tr>
-              )) : (
+              {ticketsFiltrados.length > 0 ? ticketsFiltrados.map(t => {
+                const garantia = evaluarGarantia(t.fecha_entrega);
+                return (
+                  <tr key={t.id_ticket} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '12px' }}>{t.documento_cliente}</td>
+                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{t.nombre_cliente}</td>
+                    <td style={{ padding: '12px', color: '#0052cc', fontWeight: 'bold' }}>{t.id_ticket}</td>
+                    <td style={{ padding: '12px' }}>{t.equipo}</td>
+                    
+                    {/* COLUMNA DE COBERTURA DINÁMICA */}
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <span style={{ 
+                        backgroundColor: t.estado === 'ENTREGADO' ? garantia.color : '#6c757d', 
+                        color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' 
+                      }}>
+                        {t.estado === 'ENTREGADO' ? `${garantia.icono} ${garantia.estado}` : '⏳ ESPERANDO ENTREGA'}
+                      </span>
+                    </td>
+                    
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <button 
+                        onClick={() => procesarGarantia(t)} 
+                        disabled={t.estado !== 'ENTREGADO'}
+                        style={{ backgroundColor: t.estado === 'ENTREGADO' ? '#17a2b8' : '#e9ecef', color: t.estado === 'ENTREGADO' ? 'white' : '#a1a1a1', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: t.estado === 'ENTREGADO' ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+                      >
+                        📄 Detalles de Orden
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }) : (
                 <tr>
-                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron registros de clientes o garantías.</td>
+                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron registros.</td>
                 </tr>
               )}
             </tbody>

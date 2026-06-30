@@ -25,3 +25,10 @@ class Producto(Base):
     sede = Column(String, nullable=False, index=True)
 
     fecha_ingreso = Column(DateTime, default=datetime.utcnow)
+
+
+class EventoProcesado(Base):
+    __tablename__ = "eventos_procesados"
+
+    event_id = Column(String, primary_key=True)
+    fecha_procesamiento = Column(DateTime, default=datetime.utcnow)

@@ -1,7 +1,7 @@
-// Ubicación: src/pages/Taller.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import ModalGestionTicket from '../components/ModalGestionTicket'; // <-- Importamos el modal limpio
+import ModalGestionTicket from '../components/ModalGestionTicket';
+import TarjetaTicket from '../components/TarjetaTicket'; // <-- Importamos el componente visual
 
 function Taller({ token }) {
   const [infoLocal, setInfoLocal] = useState({ usuario: 'Técnico', idUsuario: '', sede: 'Cargando...' });
@@ -49,32 +49,35 @@ function Taller({ token }) {
     if (token) cargarTicketsTaller();
   }, [token, cargarTicketsTaller]);
 
-  // --- FUNCIÓN REAL CONECTADA AL BACKEND ---
   const handleCambiarEstado = async (id_ticket, nuevoEstado, repuestos = [], notas = '', precioFinal = 0) => {
     try {
+      console.log("Enviando a backend:", { id_ticket, nuevoEstado, repuestos, notas, precioFinal });
+      
       if (nuevoEstado === 'EN_PROCESO') {
-        await axios.patch(
-          `http://localhost:8000/api/v1/tickets/${id_ticket}/iniciar`,
-          {},
-          { headers: { 'Authorization': `Bearer ${token}` } }
+        await axios.patch(`http://localhost:8000/api/v1/tickets/${id_ticket}/iniciar`, 
+          {}, { headers: { 'Authorization': `Bearer ${token}` } }
         );
       } else if (nuevoEstado === 'REPARADO') {
-        await axios.patch(
-          `http://localhost:8000/api/v1/tickets/${id_ticket}/reparar`,
+        await axios.patch(`http://localhost:8000/api/v1/tickets/${id_ticket}/reparar`, 
           {
             notas_tecnico: notas,
-            monto_total_final: precioFinal,
+            monto_total_final: parseFloat(precioFinal) || 0.0,
             repuestos_usados: repuestos
-          },
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          }, 
+          { 
+            headers: { 'Authorization': `Bearer ${token}` },
+            timeout: 8000 // <-- Aborta si el backend se congela
+          }
         );
       }
-
+      
       setModalAbierto(false);
       setTicketSeleccionado(null);
-      cargarTicketsTaller();
+      cargarTicketsTaller(); 
+      
     } catch (error) {
-      alert(`⚠️ Error al actualizar: ${error.response?.data?.detail || error.message}`);
+      console.error("Error capturado por Axios:", error);
+      alert(`⚠️ Error al actualizar: ${error.code === 'ECONNABORTED' ? 'El servidor tardó demasiado en responder (Timeout)' : error.message}`);
     }
   };
 
@@ -112,7 +115,6 @@ function Taller({ token }) {
         </div>
       )}
 
-      {/* RENDERIZAMOS EL MODAL EXTERNO */}
       {modalAbierto && ticketSeleccionado && (
         <ModalGestionTicket 
           ticket={ticketSeleccionado} 
@@ -121,20 +123,6 @@ function Taller({ token }) {
           onCambiarEstado={handleCambiarEstado} 
         />
       )}
-    </div>
-  );
-}
-
-function TarjetaTicket({ ticket, onClick }) {
-  return (
-    <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: '6px', padding: '15px', marginBottom: '15px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <strong style={{ color: '#0052cc' }}>{ticket.id_ticket}</strong>
-      </div>
-      <p style={{ margin: '0 0 5px 0', fontSize: '14px', fontWeight: 'bold' }}>{ticket.equipo}</p>
-      <button onClick={onClick} style={{ width: '100%', padding: '8px', border: 'none', borderRadius: '4px', background: '#f0f0f0', cursor: 'pointer', fontWeight: 'bold' }}>
-        ⚙️ Gestionar Equipo
-      </button>
     </div>
   );
 }

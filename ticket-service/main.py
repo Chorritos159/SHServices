@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
+from pydantic import BaseModel
 from rabbitmq import publicar_evento
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -7,10 +8,18 @@ from sqlalchemy.future import select
 import uvicorn
 import uuid
 import traceback
+import json
+from datetime import datetime
+from typing import Optional
 
 from database import engine, Base, get_db
 from models import Ticket, TicketDetalleProducto, CatalogoServicio
-from schemas import TicketCreate, TicketResponse, ReparacionData
+from schemas import TicketCreate, TicketResponse
+
+class ReparacionData(BaseModel):
+    notas_tecnico: str
+    monto_total_final: float
+    repuestos_usados: list = []
 
 app = FastAPI(
     title="Servicio de Gestión de Tickets - SHServices", 
@@ -42,8 +51,17 @@ async def crear_ticket(
     db: AsyncSession = Depends(get_db),
     x_usuario_id: str = Header(..., alias="x-usuario-id"),
     x_usuario_sede: str = Header(..., alias="x-usuario-sede"),
-    x_usuario_rol: str = Header(..., alias="x-usuario-rol")
+    x_usuario_rol: str = Header(..., alias="x-usuario-rol"),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
+    if idempotency_key:
+        query = select(Ticket).where(Ticket.idempotency_key == idempotency_key)
+        resultado = await db.execute(query)
+        ticket_existente = resultado.scalars().first()
+
+        if ticket_existente:
+            return ticket_existente
+
     prefijo = "VEN" if ticket.tipo_documento == "NOTA_VENTA" else "ORD"
     sede_actual = x_usuario_sede.upper() if x_usuario_sede else (ticket.sede.upper() if getattr(ticket, "sede", None) else "PIURA")
 
@@ -63,7 +81,8 @@ async def crear_ticket(
         monto_total=ticket.monto_total or 0.0,
         sede=sede_actual,
         estado="PENDIENTE",
-        id_usuario_recepcion=x_usuario_id
+        id_usuario_recepcion=x_usuario_id,
+        idempotency_key=idempotency_key
     )
 
     db.add(nuevo_ticket)
@@ -153,16 +172,17 @@ async def reparar_ticket(
     await db.refresh(ticket_db)
     
     try:
-        pass
+        event_id = str(uuid.uuid4())
+        print(f"✅ Preparando evento RabbitMQ: {event_id}")
     except Exception as e:
-        print(f"Advertencia: No se pudo conectar a RabbitMQ: {e}")
+        print(f"⚠️ Error RabbitMQ: {e}")
         traceback.print_exc()
 
     return {
         "id_ticket": ticket_db.id_ticket,
         "estado": ticket_db.estado,
         "monto_total_final": ticket_db.monto_total_final,
-        "mensaje": "Reparación finalizada exitosamente"
+        "mensaje": "Reparado"
     }
 
 @app.patch("/api/v1/tickets/{id_ticket}/entregar", response_model=TicketResponse)
@@ -178,6 +198,7 @@ async def entregar_ticket(id_ticket: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="El equipo aún no ha sido reparado por el taller.")
 
     ticket_db.estado = "ENTREGADO"
+    ticket_db.fecha_entrega = datetime.utcnow()
 
     await db.commit()
     await db.refresh(ticket_db)
