@@ -181,7 +181,7 @@ async def proxy_get_notificaciones(request: Request):
             
         except httpx.RequestError as e:
             # CONCEPTO SOA: DEGRADACIÓN ELEGANTE (Si el servicio cae, devolvemos lista vacía en vez de Error 500)
-            print(f"⚠️ Falla de resiliencia en Notificaciones: {e}")
+            print(f" Falla de resiliencia en Notificaciones: {e}")
             return []
 
 @app.post("/api/v1/notificaciones/marcar-leidas")

@@ -1,17 +1,15 @@
 import asyncio
 import json
 from fastapi import FastAPI, Header
+import aio_pika
 from typing import Optional
 from datetime import datetime
-import aio_pika
 
 app = FastAPI(title="Servicio de Notificaciones - SHServices")
 
 notificaciones_db = []
 
 async def consumir_eventos():
-    """Escucha a RabbitMQ aplicando el patrón Retry y Backoff"""
-    # BUCLE INFINITO DE RESILIENCIA (Patrón Retry)
     while True:
         try:
             connection = await aio_pika.connect_robust("amqp://rabbit_operator:shservices_broker_secret_token_2026@rabbitmq/")
@@ -23,7 +21,7 @@ async def consumir_eventos():
             await queue.bind(exchange, routing_key="ticket.encola")
             await queue.bind(exchange, routing_key="ticket.reparado")
             
-            print("✅ Servicio de Notificaciones conectado a RabbitMQ con soporte Multi-Sede")
+            print(" Servicio de Notificaciones conectado a RabbitMQ con soporte Multi-Sede")
             
             async with queue.iterator() as queue_iter:
                 async for message in queue_iter:
@@ -32,9 +30,11 @@ async def consumir_eventos():
                         routing_key = message.routing_key
                         fecha_actual = datetime.utcnow().strftime("%H:%M")
                         
+                        # 🔍 LOG 1: Saber si RabbitMQ realmente nos está entregando algo
+                        print(f"📩 [AMQP RECEIVE] Evento atrapado en la cola: {routing_key} | Payload: {payload}")
+                        
                         id_ticket = payload.get("correlationId", "")
                         
-                        # Extraemos la sede (Ej: "ORD-PIU-2534" -> "PIU")
                         sede_codigo = "PIU" 
                         if id_ticket and len(id_ticket.split('-')) > 1:
                             sede_codigo = id_ticket.split('-')[1].upper()
@@ -64,8 +64,7 @@ async def consumir_eventos():
                             notificaciones_db.pop()
 
         except Exception as e:
-            # CONCEPTO SOA: BACKOFF + JITTER (Espera 5 segundos y vuelve a intentar conectar)
-            print(f"⚠️ Error en RabbitMQ (Timeout/Caída). Reintentando en 5 segundos... Detalle: {e}")
+            print(f" Error en RabbitMQ (Timeout/Caída). Reintentando en 5 seconds... Detalle: {e}")
             await asyncio.sleep(5)
 
 @app.on_event("startup")

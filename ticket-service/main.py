@@ -159,9 +159,9 @@ async def crear_ticket(
                 properties=pika.BasicProperties(delivery_mode=2)
             )
             conexion_rmq.close()
-            print(f"✅ Venta Directa: Descuento encolado en RabbitMQ {event_id}")
+            print(f" Venta Directa: Descuento encolado en RabbitMQ {event_id}")
         except Exception as e:
-            print(f"⚠️ Error RabbitMQ en Venta: {e}")
+            print(f" Error RabbitMQ en Venta: {e}")
             traceback.print_exc()
 
     return ticket_completo
@@ -205,6 +205,22 @@ async def reparar_ticket(
     await db.commit()
     await db.refresh(ticket_db)
     
+    #  NUEVO: Lanzar el evento asíncrono para que la Recepción se entere
+    try:
+        evento_notificacion = {
+            "eventId": str(uuid.uuid4()),
+            "correlationId": ticket_db.id_ticket,
+            "producer": "ServicioGestionTickets",
+            "eventType": "TicketReparado",
+            "payload": {
+                "estado": "REPARADO"
+            }
+        }
+        # Llamamos al publicador que acabamos de blindar
+        await publicar_evento("tickets.eventos", "ticket.reparado", evento_notificacion)
+    except Exception as e:
+        print(f" Error enviando notificación de reparación a RabbitMQ: {e}")
+
     # 2. Despacho asíncrono a RabbitMQ para descuento de inventario en Almacén
     if hasattr(data, 'repuestos_usados') and data.repuestos_usados:
         repuestos_para_descontar = [
