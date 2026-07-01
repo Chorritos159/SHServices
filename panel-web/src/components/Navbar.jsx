@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import CampanaNotificaciones from './CampanaNotificaciones'; // <-- IMPORTAMOS LA CAMPANITA
 
 function Navbar({ token, onLogout }) {
   const navigate = useNavigate();
@@ -45,7 +46,6 @@ function Navbar({ token, onLogout }) {
           <>
             <Link to="/recepcion" style={linkStyle}>🏢 Recepción</Link>
             <Link to="/clientes" style={linkStyle}>👥 Clientes</Link>
-            <Link to="/ventas" style={linkStyle}>🛒 Ventas</Link>
           </>
         )}
 
@@ -64,8 +64,12 @@ function Navbar({ token, onLogout }) {
           </Link>
         )}
 
-        {/* ZONA DE PERFIL */}
+        {/* ZONA DE PERFIL CON LA CAMPANITA */}
         <div style={{ borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: '15px', marginLeft: '5px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+          
+          {/* AQUÍ INSERTAMOS EL COMPONENTE */}
+          <CampanaNotificaciones token={token} />
+
           <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
             {nombreUsuario} <span style={{ opacity: 0.8 }}>({rol})</span>
           </span>

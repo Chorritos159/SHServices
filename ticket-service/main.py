@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
 from pydantic import BaseModel
-from rabbitmq import publicar_evento
+from rabbitmq import publicar_evento, notificar_descuento_almacen
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
@@ -205,35 +205,16 @@ async def reparar_ticket(
     await db.commit()
     await db.refresh(ticket_db)
     
-    # 2. RabbitMQ Real (Comunicación asíncrona)
-    try:
-        event_id = str(uuid.uuid4())
-        
-        payload = {
-            "eventId": event_id,
-            "correlationId": ticket_db.id_ticket,
-            "repuestos_usados": data.repuestos_usados,
-            "timestamp": str(datetime.utcnow())
-        }
-
-        conexion_rmq = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
-        canal = conexion_rmq.channel()
-        
-        canal.queue_declare(queue='cola_descuentos_almacen', durable=True)
-        
-        canal.basic_publish(
-            exchange='',
-            routing_key='cola_descuentos_almacen',
-            body=json.dumps(payload),
-            properties=pika.BasicProperties(
-                delivery_mode=2,
-            )
-        )
-        conexion_rmq.close()
-        print(f"✅ Evento de descuento encolado con éxito: {event_id}")
-
-    except Exception as e:
-        print(f"⚠️ Error al conectar con RabbitMQ: {e}")
+    # 2. Despacho asíncrono a RabbitMQ para descuento de inventario en Almacén
+    if hasattr(data, 'repuestos_usados') and data.repuestos_usados:
+        repuestos_para_descontar = [
+            {
+                "id_producto": getattr(repuesto, "id_producto", repuesto.get("id_producto")),
+                "cantidad": getattr(repuesto, "cantidad", repuesto.get("cantidad", 1))
+            }
+            for repuesto in data.repuestos_usados
+        ]
+        notificar_descuento_almacen(ticket_db.id_ticket, repuestos_para_descontar)
 
     return {
         "id_ticket": ticket_db.id_ticket,

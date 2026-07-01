@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, Body, Depends, Security
+from fastapi import FastAPI, Request, Response, HTTPException, Body, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -161,6 +161,44 @@ async def proxy_almacen(request: Request, path: str, payload: Optional[dict] = B
             return response.json()
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="El Servicio de Almacén no se encuentra disponible.")
+
+@app.get("/api/v1/notificaciones")
+async def proxy_get_notificaciones(request: Request):
+    """Proxy con patrón de Resiliencia (Timeout) y Seguridad Perimetral"""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Reenviamos las cabeceras (incluyendo los headers inyectados x-usuario)
+            headers = dict(request.headers)
+            headers.pop("host", None) 
+            
+            # CONCEPTO SOA: TIMEOUT (Evitamos colgar el Gateway)
+            res = await client.get(
+                "http://notificaciones-service:8004/api/v1/notificaciones",
+                headers=headers,
+                timeout=3.0  # Si no responde en 3 segundos, aborta.
+            )
+            return Response(content=res.content, status_code=res.status_code, media_type="application/json")
+            
+        except httpx.RequestError as e:
+            # CONCEPTO SOA: DEGRADACIÓN ELEGANTE (Si el servicio cae, devolvemos lista vacía en vez de Error 500)
+            print(f"⚠️ Falla de resiliencia en Notificaciones: {e}")
+            return []
+
+@app.post("/api/v1/notificaciones/marcar-leidas")
+async def proxy_marcar_notificaciones(request: Request):
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = dict(request.headers)
+            headers.pop("host", None)
+            
+            res = await client.post(
+                "http://notificaciones-service:8004/api/v1/notificaciones/marcar-leidas",
+                headers=headers,
+                timeout=3.0
+            )
+            return Response(content=res.content, status_code=res.status_code, media_type="application/json")
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="Servicio de notificaciones temporalmente inaccesible")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

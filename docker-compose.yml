@@ -96,7 +96,19 @@ services:
     networks:
       - shservices-net
 
-  # 6. Escudo Perimetral (API Gateway)
+  # 6. Microservicio de Notificaciones (SVC-NOT-005)
+  notificaciones-service:
+    build: ./notificaciones-service
+    container_name: shservices-notificaciones
+    restart: always
+    ports:
+      - "8004:8004"
+    depends_on:
+      - rabbitmq
+    networks:
+      - shservices-net
+
+  # 7. Escudo Perimetral (API Gateway)
   api-gateway:
     build: ./api-gateway
     container_name: shservices-gateway
@@ -111,6 +123,7 @@ services:
       - ticket-service
       - almacen-service
       - auth-service
+      - notificaciones-service
     networks:
       - shservices-net
 

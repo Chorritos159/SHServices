@@ -85,8 +85,7 @@ function Recepcion({ token }) {
   }, [token, cargarTickets, cargarCatalogo]);
 
   // Cálculos reactivos del carrito comercial
-  const subtotalCarrito = carritoVenta.reduce((sum, p) => sum + parseFloat(p.precio_unitario || 0), 0);
-  const montoDescuento = subtotalCarrito * (porcentajeDescuento / 100);
+  const subtotalCarrito = carritoVenta.reduce((sum, p) => sum + (parseFloat(p.precio_unitario || 0) * (p.cantidad || 1)), 0);  const montoDescuento = subtotalCarrito * (porcentajeDescuento / 100);
   const totalConDescuento = subtotalCarrito - montoDescuento;
 
   // Lógica de despacho y envío asíncrono
@@ -99,7 +98,7 @@ function Recepcion({ token }) {
       // Mapeo milimétrico de datos para cumplir las restricciones del esquema de validación Pydantic
       const detallesFormateados = carritoVenta.map(prod => ({
         sku_producto: prod.id_producto,
-        cantidad: 1,
+        cantidad: prod.cantidad || 1, // 👇 ¡Ahora envía la cantidad correcta!
         precio_unitario: parseFloat(prod.precio_unitario),
         nombre_producto: prod.nombre
       }));
@@ -149,15 +148,18 @@ function Recepcion({ token }) {
     const prod = productosAlmacen.find(p => p.id_producto === productoSeleccionado);
     
     if (prod) {
-      // Verificamos si el producto ya existe en el carrito usando el ID único
-      const yaEstaEnCarrito = carritoVenta.some(item => item.id_producto === prod.id_producto);
+      const index = carritoVenta.findIndex(item => item.id_producto === prod.id_producto);
       
-      if (!yaEstaEnCarrito) {
-        setCarritoVenta([...carritoVenta, prod]);
-        setProductoSeleccionado(''); // Limpiamos el buscador
+      if (index !== -1) {
+        // Si ya existe, le sumamos 1 a su cantidad
+        const nuevoCarrito = [...carritoVenta];
+        nuevoCarrito[index].cantidad = (nuevoCarrito[index].cantidad || 1) + 1;
+        setCarritoVenta(nuevoCarrito);
       } else {
-        alert("⚠️ Este producto ya está en el carrito.");
+        // Si es nuevo, entra con cantidad 1
+        setCarritoVenta([...carritoVenta, { ...prod, cantidad: 1 }]);
       }
+      setProductoSeleccionado(''); // Limpiamos el buscador
     }
   };
 
