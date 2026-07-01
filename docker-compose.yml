@@ -3,6 +3,7 @@ services:
   db-central:
     image: postgres:15-alpine
     container_name: shservices-db
+    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -18,6 +19,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: shservices-broker
+    restart: always
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
@@ -31,6 +33,7 @@ services:
   auth-service:
     build: ./auth-service
     container_name: shservices-auth
+    restart: always
     ports:
       - "8003:8003"
     environment:
@@ -52,6 +55,7 @@ services:
   ticket-service:
     build: ./ticket-service
     container_name: shservices-tickets
+    restart: always
     ports:
       - "8001:8001"
     environment:
@@ -67,6 +71,7 @@ services:
   almacen-service:
     build: ./almacen-service
     container_name: shservices-almacen
+    restart: always
     ports:
       - "8002:8002"
     environment:
@@ -78,10 +83,23 @@ services:
     networks:
       - shservices-net
 
+  almacen-worker:
+    build: ./almacen-service
+    command: python consumidor.py
+    restart: always
+    depends_on:
+      - db-central
+      - rabbitmq
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://admin_corporativo:shservices_master_secure_db_2026@db/shservices_enterprise
+    networks:
+      - shservices-net
+
   # 6. Escudo Perimetral (API Gateway)
   api-gateway:
     build: ./api-gateway
     container_name: shservices-gateway
+    restart: always
     ports:
       - "8000:8000"
     environment:

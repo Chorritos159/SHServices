@@ -28,7 +28,8 @@ class Ticket(Base):
     sede = Column(String, nullable=False)
     monto_total = Column(Float, default=0.0)
     monto_total_final = Column(Float, default=0.0)
-    fecha_registro = Column(DateTime, default=datetime.utcnow)   
+    fecha_registro = Column(DateTime, default=datetime.utcnow)
+    fecha_entrega = Column(DateTime, nullable=True)
     # (Quedarán automáticamente en NULL si es una Nota de Venta)
     equipo = Column(String, nullable=True)
     caracteristicas = Column(String, nullable=True) # Cargador, golpes, etc.
@@ -37,7 +38,8 @@ class Ticket(Base):
     notas_tecnico = Column(String, default="Sin notas del técnico.")
     id_usuario_recepcion = Column(String, nullable=True)
     id_tecnico_asignado = Column(String, nullable=True)
-    id_servicio_aplicado = Column(String, ForeignKey("esquema_tickets.catalogo_servicios.id"), nullable=True)
+    id_servicio_aplicado = Column(String, nullable=True)
+    idempotency_key = Column(String, unique=True, index=True, nullable=True)
 
     # Relación bidireccional con los detalles de productos
     detalles = relationship("TicketDetalleProducto", back_populates="ticket")

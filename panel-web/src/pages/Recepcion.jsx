@@ -11,6 +11,7 @@ function Recepcion({ token }) {
   const [caracteristicas, setCaracteristicas] = useState('');
   const [fallas, setFallas] = useState('');
   const [monto, setMonto] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState(crypto.randomUUID());
   
   const [loading, setLoading] = useState(false);
   const [infoLocal, setInfoLocal] = useState({ usuario: 'Operador', sede: 'Cargando...' });
@@ -59,10 +60,16 @@ function Recepcion({ token }) {
         telefono_cliente: telefono, 
         equipo: equipo, caracteristicas: caracteristicas, fallas: fallas,
         monto_total: monto ? parseFloat(monto) : 0.0, sede: infoLocal.sede
-      }, { headers: { 'Authorization': `Bearer ${token}` } });
+      }, { 
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Idempotency-Key': idempotencyKey
+        } 
+      });
       
       setDocumento(''); setNombre(''); setTelefono(''); setEquipo(''); 
       setCaracteristicas(''); setFallas(''); setMonto('');
+      setIdempotencyKey(crypto.randomUUID());
       cargarTickets();
     } catch (error) {
       alert(`⚠️ Error al generar: ${error.response?.data?.detail || error.message}`);
