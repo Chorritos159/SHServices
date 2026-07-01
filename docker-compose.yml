@@ -91,7 +91,8 @@ services:
       - db-central
       - rabbitmq
     environment:
-      - DATABASE_URL=postgresql+asyncpg://admin_corporativo:shservices_master_secure_db_2026@db/shservices_enterprise
+      # Usamos la sintaxis correcta apuntando a db-central:5432
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db-central:5432/${POSTGRES_DB}"
     networks:
       - shservices-net
 

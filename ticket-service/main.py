@@ -9,6 +9,7 @@ import uvicorn
 import uuid
 import traceback
 import json
+import pika
 from datetime import datetime
 from typing import Optional
 
@@ -67,7 +68,7 @@ async def crear_ticket(
 
     id_ticket_generado = f"{prefijo}-{sede_actual[:3]}-{str(uuid.uuid4())[:4].upper()}"
 
-    estado_inicial = "COMPLETADO" if ticket.tipo_documento == "NOTA_VENTA" else "PENDIENTE"
+    estado_inicial = "PENDIENTE" if ticket.tipo_documento == "ORDEN_SERVICIO" else "ENTREGADO"
 
     nuevo_ticket = Ticket(
         id_ticket=id_ticket_generado,
@@ -80,7 +81,7 @@ async def crear_ticket(
         fallas=ticket.fallas,
         monto_total=ticket.monto_total or 0.0,
         sede=sede_actual,
-        estado="PENDIENTE",
+        estado=estado_inicial,
         id_usuario_recepcion=x_usuario_id,
         idempotency_key=idempotency_key
     )
@@ -130,6 +131,39 @@ async def crear_ticket(
         evento_payload["eventType"] = "VentaCompletada"
         await publicar_evento("tickets.eventos", "venta.completada", evento_payload)
 
+        try:
+            event_id = str(uuid.uuid4())
+            repuestos_para_descontar = [
+                {
+                    "id_producto": detalle.sku_producto,
+                    "cantidad": detalle.cantidad
+                }
+                for detalle in ticket.detalles
+            ]
+
+            payload = {
+                "eventId": event_id,
+                "correlationId": nuevo_ticket.id_ticket,
+                "repuestos_usados": repuestos_para_descontar,
+                "timestamp": str(datetime.utcnow())
+            }
+
+            parametros = pika.URLParameters("amqp://rabbit_operator:shservices_broker_secret_token_2026@rabbitmq/")
+            conexion_rmq = pika.BlockingConnection(parametros)
+            canal = conexion_rmq.channel()
+            canal.queue_declare(queue='cola_descuentos_almacen', durable=True)
+            canal.basic_publish(
+                exchange='',
+                routing_key='cola_descuentos_almacen',
+                body=json.dumps(payload),
+                properties=pika.BasicProperties(delivery_mode=2)
+            )
+            conexion_rmq.close()
+            print(f"✅ Venta Directa: Descuento encolado en RabbitMQ {event_id}")
+        except Exception as e:
+            print(f"⚠️ Error RabbitMQ en Venta: {e}")
+            traceback.print_exc()
+
     return ticket_completo
 
 @app.patch("/api/v1/tickets/{id_ticket}/iniciar", response_model=TicketResponse)
@@ -171,12 +205,35 @@ async def reparar_ticket(
     await db.commit()
     await db.refresh(ticket_db)
     
+    # 2. RabbitMQ Real (Comunicación asíncrona)
     try:
         event_id = str(uuid.uuid4())
-        print(f"✅ Preparando evento RabbitMQ: {event_id}")
+        
+        payload = {
+            "eventId": event_id,
+            "correlationId": ticket_db.id_ticket,
+            "repuestos_usados": data.repuestos_usados,
+            "timestamp": str(datetime.utcnow())
+        }
+
+        conexion_rmq = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+        canal = conexion_rmq.channel()
+        
+        canal.queue_declare(queue='cola_descuentos_almacen', durable=True)
+        
+        canal.basic_publish(
+            exchange='',
+            routing_key='cola_descuentos_almacen',
+            body=json.dumps(payload),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+            )
+        )
+        conexion_rmq.close()
+        print(f"✅ Evento de descuento encolado con éxito: {event_id}")
+
     except Exception as e:
-        print(f"⚠️ Error RabbitMQ: {e}")
-        traceback.print_exc()
+        print(f"⚠️ Error al conectar con RabbitMQ: {e}")
 
     return {
         "id_ticket": ticket_db.id_ticket,
