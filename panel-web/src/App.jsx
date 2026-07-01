@@ -6,7 +6,7 @@ import Recepcion from './pages/Recepcion';
 import Taller from './pages/Taller';
 import Clientes from './pages/Clientes';
 import AlmacenRepuestos from './pages/AlmacenRepuestos';
-import Admin from './pages/Admin';
+import ConsolaAdmin from './pages/ConsolaAdmin';
 import Navbar from './components/Navbar';
 
 function PanelPruebasSOA({ token, setToken }) {
@@ -51,7 +51,11 @@ function App() {
             <Route path="/taller" element={token ? <Taller token={token} /> : <Navigate to="/" />} />
             <Route path="/clientes" element={token ? <Clientes token={token} /> : <Navigate to="/" />} />
             <Route path="/almacen-repuestos" element={token ? <AlmacenRepuestos token={token} /> : <Navigate to="/" />} />
-            <Route path="/admin" element={token ? <Admin token={token} /> : <Navigate to="/" />} />
+            {/* Protegemos la ruta para que nadie sin token entre accidentalmente */}
+            <Route 
+              path="/admin" 
+              element={token ? <ConsolaAdmin token={token} /> : <Navigate to="/" />} 
+            />
             <Route path="/test" element={token ? <PanelPruebasSOA token={token} setToken={handleLogin} /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

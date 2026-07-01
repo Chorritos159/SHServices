@@ -200,5 +200,51 @@ async def proxy_marcar_notificaciones(request: Request):
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="Servicio de notificaciones temporalmente inaccesible")
 
+@app.get("/api/v1/usuarios")
+async def proxy_listar_usuarios(request: Request):
+    """Obtiene la lista del personal de forma resiliente"""
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = dict(request.headers)
+            headers.pop("host", None)
+            # Reenviamos la petición al puerto 8003 (auth-service)
+            res = await client.get("http://auth-service:8003/api/v1/auth/usuarios", headers=headers, timeout=5.0)
+            return Response(content=res.content, status_code=res.status_code, media_type="application/json")
+        except httpx.RequestError as e:
+            print(f"⚠️ Error conectando al auth-service: {e}")
+            raise HTTPException(status_code=503, detail="Servicio de autenticación inalcanzable")
+
+@app.post("/api/v1/usuarios/registro")
+async def proxy_registrar_usuario(request: Request):
+    """Crea un nuevo usuario (Solo Administradores)"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token no proporcionado")
+    
+    token = auth_header.split(" ")[1]
+    
+    # Decodificar el token para verificar que sea ADMIN
+    try:
+        # Leemos el payload del token
+        import jwt
+        payload = jwt.decode(token, options={"verify_signature": False}) 
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
+        
+    if payload.get("rol") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo administradores.")
+        
+    # Si es ADMIN, enviamos la creación al auth-service
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = dict(request.headers)
+            headers.pop("host", None)
+            body = await request.body() # Capturamos los datos del formulario de React
+            
+            res = await client.post("http://auth-service:8003/api/v1/auth/registro", headers=headers, content=body, timeout=5.0)
+            return Response(content=res.content, status_code=res.status_code, media_type="application/json")
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail="Servicio de autenticación inalcanzable")
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
