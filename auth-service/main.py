@@ -14,12 +14,10 @@ from models import Usuario
 
 app = FastAPI(title="Servicio de Autenticación e Identidad - SHServices")
 
-# --- CONFIGURACIÓN DE SEGURIDAD ---
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- ESQUEMAS PYDANTIC ---
 class LoginRequest(BaseModel):
     usuario: str
     password: str
@@ -30,31 +28,28 @@ class RegistroRequest(BaseModel):
     rol: str
     sede: str
 
-# --- INICIALIZACIÓN DE LA BD ---
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS esquema_auth"))
         await conn.run_sync(Base.metadata.create_all)
 
-# --- ENDPOINTS ---
+
+from sqlalchemy import func
 
 @app.post("/api/v1/auth/login")
 async def login(credenciales: LoginRequest, db: AsyncSession = Depends(get_db)):
-    # 1. Buscar al usuario en la BD
-    query = select(Usuario).where(Usuario.id_usuario == credenciales.usuario)
+    query = select(Usuario).where(func.lower(Usuario.id_usuario) == func.lower(credenciales.usuario))
     resultado = await db.execute(query)
     usuario_db = resultado.scalars().first()
 
-    # 2. Validar existencia, estado activo y contraseña
     if not usuario_db or not usuario_db.activo:
         raise HTTPException(status_code=401, detail="Usuario incorrecto o inactivo")
     
     if not pwd_context.verify(credenciales.password, usuario_db.password_hash):
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
-    # 3. Generar el Token JWT
-    expiracion = datetime.now(timezone.utc) + timedelta(hours=8) # Turno laboral normal
+    expiracion = datetime.now(timezone.utc) + timedelta(hours=8)
     payload = {
         "id_usuario": usuario_db.id_usuario,
         "rol": usuario_db.rol,
@@ -67,16 +62,12 @@ async def login(credenciales: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 @app.post("/api/v1/auth/registro")
 async def registrar_usuario(nuevo_usuario: RegistroRequest, db: AsyncSession = Depends(get_db)):
-    # NOTA: En un entorno 100% estricto, validaríamos aquí que quien hace la petición 
-    # tenga el rol ADMIN. Sin embargo, como el API Gateway ya bloquea las peticiones 
-    # de no-admins antes de que lleguen aquí, este servicio está protegido perimetralmente.
     
     query = select(Usuario).where(Usuario.id_usuario == nuevo_usuario.usuario)
     resultado = await db.execute(query)
     if resultado.scalars().first():
         raise HTTPException(status_code=400, detail="El nombre de usuario ya está registrado")
 
-    # Encriptar contraseña antes de guardar
     hash_seguro = pwd_context.hash(nuevo_usuario.password)
 
     db_user = Usuario(
@@ -92,12 +83,10 @@ async def registrar_usuario(nuevo_usuario: RegistroRequest, db: AsyncSession = D
 
 @app.get("/api/v1/auth/usuarios")
 async def listar_usuarios(db: AsyncSession = Depends(get_db)):
-    # Seleccionamos solo los datos seguros (NUNCA devolver el password_hash al frontend)
     query = select(Usuario.id_usuario, Usuario.rol, Usuario.sede, Usuario.activo)
     resultado = await db.execute(query)
     usuarios = resultado.all()
     
-    # Formateamos la respuesta como una lista de diccionarios
     return [
         {"id": u.id_usuario, "rol": u.rol, "sede": u.sede, "activo": u.activo} 
         for u in usuarios

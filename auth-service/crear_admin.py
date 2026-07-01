@@ -14,7 +14,6 @@ async def sembrar_admins():
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSession(engine) as session:
-        # Extraemos los datos del .env sin dejar ningún respaldo en el código
         equipo = [
             {"user": os.getenv("ADMIN1_USER"), "pass": os.getenv("ADMIN1_PASS")},
             {"user": os.getenv("ADMIN2_USER"), "pass": os.getenv("ADMIN2_PASS")},
@@ -33,12 +32,12 @@ async def sembrar_admins():
                 session.add(nuevo_admin)
                 try:
                     await session.commit()
-                    print(f"✅ ¡Admin '{admin['user']}' creado con éxito!")
+                    print(f" ¡Admin '{admin['user']}' creado con éxito!")
                 except Exception:
-                    await session.rollback() # Previene que la BD se bloquee si el usuario ya existe
-                    print(f"⚠️ El usuario '{admin['user']}' ya está registrado.")
+                    await session.rollback()
+                    print(f" El usuario '{admin['user']}' ya está registrado.")
             else:
-                print("❌ Faltan credenciales en el archivo .env para uno de los usuarios.")
+                print(" Faltan credenciales en el archivo .env para uno de los usuarios.")
 
 if __name__ == "__main__":
     asyncio.run(sembrar_admins())

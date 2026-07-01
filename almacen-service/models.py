@@ -15,13 +15,11 @@ class Producto(Base):
     nombre = Column(String, nullable=False, index=True)
     descripcion = Column(String)
 
-    # Clasificación clave: "REPUESTO", "VENTA_PUBLICA", "AMBOS"
     categoria = Column(String, nullable=False, default="VENTA_PUBLICA")
 
     stock = Column(Integer, default=0, nullable=False)
     precio_unitario = Column(Float, default=0.0, nullable=False)
 
-    # Aislamiento Multi-Tenant (Multi-Sede)
     sede = Column(String, nullable=False, index=True)
 
     fecha_ingreso = Column(DateTime, default=datetime.utcnow)

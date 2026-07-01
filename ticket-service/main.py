@@ -32,10 +32,8 @@ async def startup():
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS esquema_tickets"))
         await conn.run_sync(Base.metadata.create_all)
 
-# --- NUEVO: ENDPOINT PARA LISTAR TICKETS ---
 @app.get("/api/v1/tickets")
 async def listar_tickets(sede: str = None, db: AsyncSession = Depends(get_db)):
-    # Si nos pasan la sede, filtramos. Si no, devolvemos todos.
     if sede:
         query = select(Ticket).where(Ticket.sede == sede).order_by(Ticket.fecha_registro.desc())
     else:
@@ -173,9 +171,9 @@ async def reparar_ticket(
     
     try:
         event_id = str(uuid.uuid4())
-        print(f"✅ Preparando evento RabbitMQ: {event_id}")
+        print(f" Preparando evento RabbitMQ: {event_id}")
     except Exception as e:
-        print(f"⚠️ Error RabbitMQ: {e}")
+        print(f" Error RabbitMQ: {e}")
         traceback.print_exc()
 
     return {

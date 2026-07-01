@@ -13,35 +13,30 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Obtenemos la URL del frontend desde el entorno
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip().strip('"').strip("'")
 
-# --- CONFIGURACIÓN DE CORS (Permitir al Frontend conectarse) ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         FRONTEND_URL,
-        "http://localhost:5173",  # Respaldo explícito
-        "http://127.0.0.1:5173"   # Respaldo explícito
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mapa de enrutamiento interno
 SERVICIOS = {
     "tickets": "http://ticket-service:8001",
     "almacen": "http://almacen-service:8002",
     "auth": "http://auth-service:8003"
 }
 
-# --- CONFIGURACIÓN DE SEGURIDAD CRÍTICA ---
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 security = HTTPBearer()
 
-# 1. AUTENTICACIÓN (AuthN)
 def verificar_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     try:
         token = credentials.credentials
@@ -52,7 +47,6 @@ def verificar_token(credentials: HTTPAuthorizationCredentials = Security(securit
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido, corrupto o falsificado.")
 
-# 2. AUTORIZACIÓN (AuthZ)
 def verificar_permisos_operativos(usuario_token: dict = Depends(verificar_token)):
     rol_usuario = usuario_token.get("rol")
     if rol_usuario not in ["RECEPCIONISTA", "TECNICO", "ADMIN"]:
@@ -60,7 +54,6 @@ def verificar_permisos_operativos(usuario_token: dict = Depends(verificar_token)
     return usuario_token
 
 
-# --- RUTAS DE AUTENTICACIÓN E IDENTIDAD (IAM) ---
 
 @app.post("/api/v1/auth/login")
 async def proxy_login(payload: dict = Body(...)):
@@ -100,7 +93,6 @@ async def proxy_listar_usuarios(usuario_token: dict = Depends(verificar_permisos
             raise HTTPException(status_code=503, detail="Servicio de Autenticación no disponible.")
 
 
-# --- TICKETS ---
 
 @app.get("/api/v1/tickets")
 async def proxy_obtener_tickets(request: Request, token: dict = Depends(verificar_permisos_operativos)):
@@ -143,7 +135,6 @@ async def proxy_tickets_subrutas(request: Request, path: str, payload: Optional[
             raise HTTPException(status_code=502, detail=f"Error en ruta dinámica: {response.text}")
 
 
-# --- RUTAS DE ALMACÉN ---
 @app.api_route("/api/v1/almacen/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def proxy_almacen(request: Request, path: str, payload: Optional[dict] = Body(None), usuario_token: dict = Depends(verificar_permisos_operativos)):
     url = f"{SERVICIOS['almacen']}/api/v1/almacen/{path}"
